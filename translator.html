@@ -535,8 +535,7 @@
             <div class="confidence-booster">
                 <h4>⚡ Confidence Booster</h4>
                 <p>Force high confidence for testing:</p>
-                <button onclick="enableUltraMode()">Enable ULTRA Mode</button>
-                <button onclick="applyConfidenceHack()">Apply Confidence Hack</button>
+                <p style="margin-top:8px;">ULTRA mode and confidence boosting are enabled by default. Manual controls removed to avoid accidental toggles.</p>
             </div>
 
             <div class="reset-confirmation" id="resetConfirmation">
@@ -574,6 +573,9 @@
                     <option value="no">No 👎</option>
                     <option value="bye-bye">Bye Bye 👋</option>
                     <option value="how are you">How Are You ❓</option>
+                    <option value="sorry">Sorry 😔</option>
+                    <option value="please">Please 🤲</option>
+                    <option value="fine">Fine 👌</option>
                 </select>
                 
                 <button id="startRecording" style="background: #e91e63;">🎬 Start Recording (4s)</button>
@@ -590,6 +592,9 @@
                     <li><strong>Yes 👍</strong>: Thumb up</li>
                     <li><strong>No 👎</strong>: Thumb down or shaking hand</li>
                     <li><strong>Hello 👋</strong>: Wave hand</li>
+                    <li><strong>Sorry 😔</strong>: fist on circular motion on chest</li>
+                    
+
                 </ul>
             </div>
         </section>
@@ -648,10 +653,10 @@
         // Backend API URL
         const API_URL = 'http://127.0.0.1:5000';
 
-        // ULTRA-FORGIVING confidence thresholds
-        const STABLE_CONFIDENCE = 0.35;        // Very low!
-        const AUTO_APPEND_CONFIDENCE = 0.45;   // Very forgiving  
-        const AUTO_SPEAK_CONFIDENCE = 0.4;     // Speaks often
+    // ULTRA-FORGIVING confidence thresholds (made mutable so ULTRA mode can adjust them)
+    let STABLE_CONFIDENCE = 0.2;        // ULTRA default
+    let AUTO_APPEND_CONFIDENCE = 0.3;   // ULTRA default
+    let AUTO_SPEAK_CONFIDENCE = 0.25;   // ULTRA default
 
         // Sentence mode variables
         let sentenceMode = false;
@@ -676,7 +681,8 @@
         const lastSpokenAt = {};
         let lastPredictionTime = 0;
         let predictionHistory = [];
-        let ultraMode = false;
+    // ULTRA mode enabled by default so adjustments are applied automatically
+    let ultraMode = true;
 
         // Test connection on page load
         testConnection();
@@ -1205,6 +1211,27 @@
                 return false;
             }
         }
+
+        // Enable ULTRA defaults automatically on page load
+        // This applies the ULTRA thresholds and a one-time confidence UI override so
+        // you don't need to click the Enable/Apply buttons.
+        (function enableDefaultsOnLoad() {
+            try {
+                // Apply ULTRA behavioral defaults
+                enableUltraMode();
+
+                // Apply the simple confidence UI 'hack' once so the display shows boosted confidence
+                // Note: this only affects the UI display, not the underlying model logic.
+                applyConfidenceHack();
+
+                // Update mode label
+                predictionMode.textContent = ultraMode ? 'ULTRA MODE (auto)' : predictionMode.textContent;
+                trainingMessage.textContent = 'ULTRA defaults applied automatically.';
+                trainingMessage.style.color = '#ff4081';
+            } catch (e) {
+                console.warn('Could not auto-enable ULTRA defaults:', e);
+            }
+        })();
 
         // Initialize MediaPipe
         function initializeMediaPipe() {

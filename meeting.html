@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SignLanguage Pro | Real-time Translator</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background: #1a1d29;
+            color: #ffffff;
+            min-height: 100vh;
+            overflow: hidden;
+        }
+
+        /* Google Meet Style Header */
+        .header {
+            padding: 16px 24px;
+            background: #1a1d29;
+            border-bottom: 1px solid #3c4043;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 64px;
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 1.3rem;
+            font-weight: 500;
+            color: #ffffff;
+        }
+
+        .logo-icon {
+            font-size: 1.6rem;
+        }
+
+        .header-controls {
+            display: flex;
+            gap: 16px;
+            align-items: center;
+        }
+
+        .status-indicators {
+            display: flex;
+            gap: 20px;
+            font-size: 0.9rem;
+            opacity: 0.8;
+        }
+
+        /* Main Video Area - Google Meet Style */
+        .main-container {
+            display: flex;
+            flex-direction: column;
+            height: calc(100vh - 64px);
+            background: #1a1d29;
+        }
+
+        .video-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            gap: 30px;
+        }
+
+        .video-feed-container {
+            position: relative;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 100%;
+        }
+
+        #videoFeed {
+            width: 100%;
+            display: block;
+            transform: scaleX(-1);
+        }
+
+        #outputCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Translation Display - Centered */
+        .translation-display {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 30px 40px;
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            text-align: center;
+            max-width: 600px;
+            width: 100%;
+            backdrop-filter: blur(10px);
+        }
+
+        .translation-text {
+            font-size: 2.5rem;
+            margin-bottom: 20px;
+            min-height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            font-weight: 300;
+        }
+
+        .confidence-meter {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .confidence-bar {
+            flex: 1;
+            height: 6px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #ea4335, #fbbc04, #34a853);
+            border-radius: 3px;
+            transition: width 0.3s ease;
+        }
+
+        .confidence-text {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            min-width: 80px;
+            text-align: right;
+        }
+
+        /* Google Meet Style Controls Bar */
+        .controls-bar {
+            position: fixed;
+            bottom: 24px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(32, 33, 36, 0.9);
+            padding: 12px 24px;
+            border-radius: 48px;
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            z-index: 1000;
+        }
+
+        .btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 24px;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: #1a73e8;
+        }
+
+        .btn-primary:hover {
+            background: #1669d6;
+        }
+
+        .btn-danger {
+            background: #ea4335;
+        }
+
+        .btn-danger:hover {
+            background: #d33426;
+        }
+
+        .speaking {
+            background: #fbbc04 !important;
+        }
+
+        .high-confidence {
+            color: #34a853;
+            font-weight: 600;
+        }
+
+        /* Status Indicators */
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ea4335;
+        }
+
+        .status-dot.active {
+            background: #34a853;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.5; }
+            100% { opacity: 1; }
+        }
+
+        /* Minimal Settings Panel */
+        .settings-panel {
+            position: fixed;
+            top: 80px;
+            right: 24px;
+            background: rgba(32, 33, 36, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            min-width: 200px;
+            display: none;
+            z-index: 1000;
+        }
+
+        .settings-panel.show {
+            display: block;
+        }
+
+        .settings-title {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #ffffff;
+        }
+
+        .settings-item {
+            margin-bottom: 15px;
+        }
+
+        .settings-label {
+            font-size: 0.9rem;
+            opacity: 0.8;
+            margin-bottom: 8px;
+        }
+
+        .speed-controls {
+            display: flex;
+            gap: 8px;
+        }
+
+        .speed-btn {
+            flex: 1;
+            padding: 8px 12px;
+            font-size: 0.8rem;
+        }
+    </style>
+</head>
+<body>
+    <!-- Google Meet Style Header -->
+    <div class="header">
+        <div class="logo">
+            <span class="logo-icon">🤟</span>
+            <span>SignLanguage Pro</span>
+        </div>
+        <div class="header-controls">
+            <div class="status-indicators">
+                <span id="connectionStatus">Connecting...</span>
+                <span>•</span>
+                <span id="handsStatus">No hands detected</span>
+                <span>•</span>
+                <span id="responseTime">0ms</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <div class="main-container">
+        <div class="video-content">
+            <!-- Video Feed -->
+            <div class="video-feed-container">
+                <video id="videoFeed" autoplay playsinline></video>
+                <canvas id="outputCanvas"></canvas>
+            </div>
+
+            <!-- Translation Display -->
+            <div class="translation-display">
+                <div class="translation-text" id="translationOutput">
+                    <span>👋</span>
+                    <span>Show your hand to begin translation</span>
+                </div>
+                <div class="confidence-meter">
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="confidenceFill" style="width: 0%"></div>
+                    </div>
+                    <div class="confidence-text" id="confidenceText">0% confidence</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Google Meet Style Controls Bar -->
+    <div class="controls-bar">
+        <button class="btn btn-primary" id="startCamera">
+            <span>▶️</span>
+            Start Camera
+        </button>
+        <button class="btn btn-danger" id="stopCamera" disabled>
+            <span>⏹️</span>
+            Stop Camera
+        </button>
+        <button class="btn" id="speakBtn" disabled>
+            <span>🔊</span>
+            Speak
+        </button>
+        <button class="btn" id="settingsBtn">
+            <span>⚙️</span>
+            Settings
+        </button>
+    </div>
+
+    <!-- Minimal Settings Panel -->
+    <div class="settings-panel" id="settingsPanel">
+        <div class="settings-title">Translation Settings</div>
+        <div class="settings-item">
+            <div class="settings-label">Response Speed</div>
+            <div style="text-align: center; margin-top: 8px; font-size: 0.9rem; opacity: 0.9;">
+                Fixed response speed: <strong>800ms</strong>
+            </div>
+        </div>
+        <div class="settings-item">
+            <div class="settings-label">Stability</div>
+            <div style="text-align: center; font-size: 0.9rem; color: #34a853;" id="stabilityIndicator">
+                Waiting...
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // DOM Elements
+        const videoFeed = document.getElementById('videoFeed');
+        const outputCanvas = document.getElementById('outputCanvas');
+        const startCameraBtn = document.getElementById('startCamera');
+        const stopCameraBtn = document.getElementById('stopCamera');
+        const translationOutput = document.getElementById('translationOutput');
+        const speakBtn = document.getElementById('speakBtn');
+        const settingsBtn = document.getElementById('settingsBtn');
+        const confidenceFill = document.getElementById('confidenceFill');
+        const confidenceText = document.getElementById('confidenceText');
+        const connectionStatus = document.getElementById('connectionStatus');
+        const handsStatus = document.getElementById('handsStatus');
+        const responseTime = document.getElementById('responseTime');
+        const settingsPanel = document.getElementById('settingsPanel');
+        const debounceValue = document.getElementById('debounceValue');
+        const stabilityIndicator = document.getElementById('stabilityIndicator');
+
+        // Backend API URL
+        const API_URL = 'http://127.0.0.1:5000';
+
+        // ================= DEBOUNCER CONFIGURATION =================
+        let lastPredictionTime = 0;
+        // Faster response: shorter debounce between predict requests
+        let predictionDebounceDelay = 300; // ms (was 800)
+    // After accepting a stable prediction, ignore input for this many ms
+    let postAcceptCooldown = 1500; // 0.8s (was 2000)
+    // Timestamp until which input is ignored
+    let nextAcceptUntil = 0;
+        let predictionHistory = [];
+        const HISTORY_SIZE = 3; // fewer frames to accumulate for faster acceptance
+        const CONFIDENCE_THRESHOLD = 0.5; // lower threshold to accept quicker
+        let stabilityScore = 0;
+        // ============================================================
+
+        // Application state
+        let stream = null;
+        let isCameraOn = false;
+        let hands = null;
+        let camera = null;
+        let lastLandmarks = null;
+        let currentTranslation = '';
+        let currentConfidence = 0;
+
+        // Test backend connection
+        async function testConnection() {
+            try {
+                const response = await fetch(`${API_URL}/api/health`);
+                const result = await response.json();
+                if (result.status === 'healthy') {
+                    connectionStatus.textContent = 'Connected ✅';
+                    return true;
+                }
+            } catch (error) {
+                connectionStatus.textContent = 'Disconnected ❌';
+                return false;
+            }
+        }
+
+        // Initialize MediaPipe
+        function initializeMediaPipe() {
+            hands = new Hands({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`;
+                }
+            });
+
+            hands.setOptions({
+                maxNumHands: 2,
+                modelComplexity: 1,
+                minDetectionConfidence: 0.7,
+                minTrackingConfidence: 0.5
+            });
+
+            hands.onResults(onHandResults);
+        }
+
+        // Process hand results with debouncer
+        async function onHandResults(results) {
+            const canvasCtx = outputCanvas.getContext('2d');
+            const videoWidth = videoFeed.videoWidth;
+            const videoHeight = videoFeed.videoHeight;
+            
+            outputCanvas.width = videoWidth;
+            outputCanvas.height = videoHeight;
+            
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+            canvasCtx.drawImage(results.image, 0, 0, outputCanvas.width, outputCanvas.height);
+            
+            let detectedHands = 0;
+
+            if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                detectedHands = results.multiHandLandmarks.length;
+                lastLandmarks = results.multiHandLandmarks[0];
+                
+                for (const landmarks of results.multiHandLandmarks) {
+                    drawConnectors(canvasCtx, landmarks, HAND_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+                    drawLandmarks(canvasCtx, landmarks, {color: '#FF0000', lineWidth: 1, radius: 3});
+                }
+
+                handsStatus.textContent = `${detectedHands} hand${detectedHands !== 1 ? 's' : ''} detected`;
+                await classifyHandPose(lastLandmarks);
+            } else {
+                lastLandmarks = null;
+                handsStatus.textContent = 'No hands detected';
+                clearPredictionHistory();
+                
+                if (currentTranslation !== '') {
+                    currentTranslation = '';
+                    updateTranslationDisplay();
+                    speakBtn.disabled = true;
+                }
+            }
+            
+            canvasCtx.restore();
+        }
+
+        // ================= DEBOUNCER FUNCTIONS =================
+        async function classifyHandPose(landmarks) {
+            const now = Date.now();
+            // If we accepted a stable result recently, ignore new inputs until cooldown expires
+            if (now < nextAcceptUntil) return;
+
+            if (now - lastPredictionTime < predictionDebounceDelay) {
+                return;
+            }
+            
+            try {
+                // Mark that we're issuing a prediction now so further calls are debounced
+                lastPredictionTime = now;
+
+                const startTime = performance.now();
+                const landmarkData = landmarks.map(lm => [lm.x, lm.y, lm.z]).flat();
+                
+                const response = await fetch(`${API_URL}/api/predict`, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({landmarks: landmarkData})
+                });
+
+                if (response.ok) {
+                    const result = await response.json();
+                    const endTime = performance.now();
+                    const responseTimeMs = Math.round(endTime - startTime);
+                    
+                    connectionStatus.textContent = 'Connected ✅';
+                    responseTime.textContent = `${responseTimeMs}ms`;
+                    
+                    if (result.success && result.prediction) {
+                        processPredictionWithStability(result.prediction);
+                        // lastPredictionTime already set when request was sent (above)
+                    }
+                }
+            } catch (error) {
+                console.log("Prediction failed:", error);
+                connectionStatus.textContent = 'Disconnected ❌';
+            }
+        }
+
+        function processPredictionWithStability(prediction) {
+            predictionHistory.push({
+                sign: prediction.sign,
+                confidence: prediction.confidence,
+                timestamp: Date.now()
+            });
+            
+            if (predictionHistory.length > HISTORY_SIZE) {
+                predictionHistory.shift();
+            }
+            
+            updateStabilityIndicator();
+            
+            if (predictionHistory.length >= 3) {
+                const stableResult = calculateStablePrediction();
+                if (stableResult) {
+                    updateTranslationDisplay(stableResult);
+                    
+                    if (stableResult.confidence > 0.7 && 
+                        stableResult.sign !== 'no hand' && 
+                        stableResult.sign !== 'unknown' &&
+                        stableResult.sign !== 'train me first') {
+                        autoSpeak(stableResult.sign);
+                        // set a cooldown after accepting this stable prediction to avoid immediate re-acceptance
+                        nextAcceptUntil = Date.now() + postAcceptCooldown;
+                    }
+                }
+            } else {
+                updateTranslationDisplay(prediction);
+            }
+        }
+
+        function calculateStablePrediction() {
+            // Use a shorter recent window to make stability check faster
+            const recentHistory = predictionHistory.filter(p => 
+                p.confidence > CONFIDENCE_THRESHOLD && 
+                Date.now() - p.timestamp < 1500
+            );
+            
+            if (recentHistory.length === 0) return null;
+            
+            const signCounts = {};
+            const signConfidences = {};
+            
+            recentHistory.forEach(pred => {
+                if (!signCounts[pred.sign]) {
+                    signCounts[pred.sign] = 0;
+                    signConfidences[pred.sign] = [];
+                }
+                signCounts[pred.sign]++;
+                signConfidences[pred.sign].push(pred.confidence);
+            });
+            
+            let mostFrequentSign = null;
+            let maxCount = 0;
+            
+            for (const [sign, count] of Object.entries(signCounts)) {
+                if (count > maxCount) {
+                    maxCount = count;
+                    mostFrequentSign = sign;
+                }
+            }
+            
+            stabilityScore = maxCount / recentHistory.length;
+            
+            if (mostFrequentSign && maxCount >= Math.floor(recentHistory.length / 2)) {
+                const avgConfidence = signConfidences[mostFrequentSign].reduce((a, b) => a + b, 0) / signConfidences[mostFrequentSign].length;
+                return {
+                    sign: mostFrequentSign,
+                    confidence: avgConfidence
+                };
+            }
+            
+            return null;
+        }
+
+        function updateStabilityIndicator() {
+            if (predictionHistory.length < 2) {
+                stabilityIndicator.textContent = 'Collecting...';
+                stabilityIndicator.style.color = '#fbbc04';
+                return;
+            }
+            
+            if (stabilityScore > 0.8) {
+                stabilityIndicator.textContent = 'Very Stable';
+                stabilityIndicator.style.color = '#34a853';
+            } else if (stabilityScore > 0.6) {
+                stabilityIndicator.textContent = 'Stable';
+                stabilityIndicator.style.color = '#fbbc04';
+            } else {
+                stabilityIndicator.textContent = 'Unstable';
+                stabilityIndicator.style.color = '#ea4335';
+            }
+        }
+
+        function clearPredictionHistory() {
+            predictionHistory = [];
+            stabilityScore = 0;
+            stabilityIndicator.textContent = 'Waiting...';
+            stabilityIndicator.style.color = '#fbbc04';
+        }
+
+        function adjustDebounce(change) {
+            // Debounce is fixed and cannot be changed at runtime per user preference.
+            console.log('adjustDebounce called but is disabled in this build.');
+        }
+        // ================= END DEBOUNCER FUNCTIONS =================
+
+        // Update translation display
+        function updateTranslationDisplay(prediction = null) {
+            if (prediction) {
+                const signText = prediction.sign;
+                const signEmoji = getEmojiForSign(signText);
+                currentTranslation = signText;
+                currentConfidence = prediction.confidence;
+                
+                translationOutput.innerHTML = `
+                    <span style="font-size: 3rem;">${signEmoji}</span>
+                    <span>${signText}</span>
+                `;
+                
+                const confidencePercent = Math.round(prediction.confidence * 100);
+                confidenceFill.style.width = `${confidencePercent}%`;
+                confidenceText.textContent = `${confidencePercent}% confidence`;
+                confidenceText.className = `confidence-text ${confidencePercent > 70 ? 'high-confidence' : ''}`;
+                
+                speakBtn.disabled = false;
+            } else {
+                translationOutput.innerHTML = `
+                    <span>👋</span>
+                    <span>Show your hand to begin translation</span>
+                `;
+                confidenceFill.style.width = '0%';
+                confidenceText.textContent = '0% confidence';
+                confidenceText.className = 'confidence-text';
+                currentTranslation = '';
+                speakBtn.disabled = true;
+            }
+        }
+
+        // Get emoji for sign
+        function getEmojiForSign(sign) {
+            const emojiMap = {
+                'hello': '👋', 'thank you': '🙏', 'i love you': '🤟', 'yes': '👍', 'no': '👎',
+                'please': '🤲', 'sorry': '😔', 'help': '🆘', 'water': '💧', 'food': '🍕',
+                'home': '🏠', 'friend': '👫', 'family': '👨‍👩‍👧‍👦', 'time': '⏰', 'today': '📅',
+                'tomorrow': '🌅', 'good': '👍', 'bad': '👎', 'happy': '😊', 'sad': '😢'
+            };
+            return emojiMap[sign] || '👋';
+        }
+
+        // Auto-speak function
+        function autoSpeak(sign) {
+            if ('speechSynthesis' in window) {
+                const utterance = new SpeechSynthesisUtterance(sign);
+                // Slightly faster speech to make meeting feedback snappier
+                utterance.rate = 1.05;
+                utterance.pitch = 1;
+                utterance.volume = 0.8;
+                
+                speakBtn.classList.add('speaking');
+                speechSynthesis.speak(utterance);
+                
+                utterance.onend = function() {
+                    speakBtn.classList.remove('speaking');
+                };
+            }
+        }
+
+        // Manual speak function
+        function speakTranslation() {
+            if (!currentTranslation) return;
+            autoSpeak(currentTranslation);
+        }
+
+        // Camera functions
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 1280, height: 720 } 
+                });
+                videoFeed.srcObject = stream;
+                isCameraOn = true;
+                
+                startCameraBtn.disabled = true;
+                stopCameraBtn.disabled = false;
+                
+                initializeMediaPipe();
+                
+                camera = new Camera(videoFeed, {
+                    onFrame: async () => {
+                        if (hands) await hands.send({ image: videoFeed });
+                    },
+                    width: 1280,
+                    height: 720
+                });
+                camera.start();
+                
+            } catch (err) {
+                alert("Error: Could not access camera");
+                console.error("Camera error:", err);
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                videoFeed.srcObject = null;
+                isCameraOn = false;
+                
+                startCameraBtn.disabled = false;
+                stopCameraBtn.disabled = true;
+                speakBtn.disabled = true;
+                
+                const canvasCtx = outputCanvas.getContext('2d');
+                canvasCtx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+                
+                updateTranslationDisplay();
+                clearPredictionHistory();
+            }
+        }
+
+        // Modal functions
+        function toggleSettings() {
+            settingsPanel.classList.toggle('show');
+        }
+
+        // Close settings when clicking outside
+        document.addEventListener('click', function(event) {
+            if (!settingsPanel.contains(event.target) && !settingsBtn.contains(event.target)) {
+                settingsPanel.classList.remove('show');
+            }
+        });
+
+        // Event Listeners
+        startCameraBtn.addEventListener('click', startCamera);
+        stopCameraBtn.addEventListener('click', stopCamera);
+        speakBtn.addEventListener('click', speakTranslation);
+        settingsBtn.addEventListener('click', toggleSettings);
+
+        // Initialize
+        testConnection();
+        debounceValue.textContent = `${predictionDebounceDelay}ms`;
+    </script>
+</body>
+</html>

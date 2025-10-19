@@ -10,7 +10,12 @@ CORS(app)
 
 class SimpleSignLanguageTrainer:
     def __init__(self):
-        self.sign_classes = ['hello', 'thank you', 'i love you', 'yes', 'no', 'please', 'sorry', 'bye-bye', 'how are you']
+        # Keep sign names lowercase and normalized; include additional aliases used by the UI
+        self.sign_classes = [
+            'hello', 'thank you', 'i love you', 'yes', 'no', 'please', 'sorry',
+            'help', 'water', 'food', 'home', 'friend', 'family', 'time', 'today',
+            'tomorrow', 'good', 'bad', 'happy', 'sad', 'bye-bye', 'how are you', 'fine'
+        ]
         self.training_data = {'samples': [], 'labels': []}
         self.model_accuracy = 0.0
         self.model_trained = False
@@ -365,6 +370,9 @@ def add_sample():
         data = request.get_json()
         landmarks = data.get('landmarks', [])
         label = data.get('label', '')
+        # Normalize label (trim and lowercase) to be robust against UI casing/spaces
+        if isinstance(label, str):
+            label = label.strip().lower()
         
         if label not in trainer.sign_classes:
             return jsonify({'success': False, 'error': f'Invalid label: {label}'}), 400
@@ -385,6 +393,8 @@ def add_video_sample():
         data = request.get_json()
         video_frames = data.get('frames', [])
         label = data.get('label', '')
+        if isinstance(label, str):
+            label = label.strip().lower()
         
         if label not in trainer.sign_classes:
             return jsonify({'success': False, 'error': f'Invalid label: {label}'}), 400
