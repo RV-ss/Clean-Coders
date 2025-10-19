@@ -650,8 +650,18 @@
         const videoSignSelect = document.getElementById('videoSignSelect');
         const videoStatus = document.getElementById('videoStatus');
 
-        // Backend API URL
-        const API_URL = 'https://sign-it-asl-translator.onrender.com';
+        // Backend API URL - prefer same host as page (for local hosting), fallback to localhost
+        const API_URL = (function() {
+            try {
+                const host = location.hostname || '127.0.0.1';
+                const url = `http://${host}:5000`;
+                console.log('API_URL set to', url);
+                return url;
+            } catch (e) {
+                console.warn('Could not derive API_URL from location, using http://127.0.0.1:5000');
+                return 'http://127.0.0.1:5000';
+            }
+        })();
 
     // ULTRA-FORGIVING confidence thresholds (made mutable so ULTRA mode can adjust them)
     let STABLE_CONFIDENCE = 0.2;        // ULTRA default
