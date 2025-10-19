@@ -50,6 +50,56 @@ Running the server
 python .\app.py
 ```
 
+Render deployment notes
+-----------------------
+
+If you deploy the backend to Render (or a similar service) the repository includes a simple `Procfile` which starts the app using `gunicorn`.
+
+- Before starting the service on Render, set an environment variable to restrict CORS origins for safety:
+
+  ALLOWED_ORIGINS=https://clean-coders-asl-ai-translator.onrender.com
+
+  You can also include multiple origins separated by commas (for example, add `http://localhost:5000` while testing locally).
+
+- Render start command (Procfile provided):
+
+  web: gunicorn app:app -b 0.0.0.0:$PORT --workers 2
+
+The front-end files (`translator.html`, `meeting.html`) are already configured to prefer the deployed Render API at:
+
+  https://clean-coders-asl-ai-translator.onrender.com
+
+so once your Render service is live the static pages will point to the deployed API by default. If you host the front-end separately, set an env var `__API_URL__` to override the built-in preference.
+
+How to finish deployment on Render (manual steps)
+------------------------------------------------
+
+1. Push your repository to GitHub.
+
+2. Go to https://dashboard.render.com and create a new Web Service.
+  - Connect your GitHub repo and select the branch to deploy.
+  - For the Start Command use: `gunicorn app:app -b 0.0.0.0:$PORT --workers 2` (or rely on `render.yaml`).
+  - Set the build command to `pip install -r requirements.txt` (or leave blank if using `render.yaml`).
+
+3. Set environment variables (in the Render dashboard -> Environment):
+  - `ALLOWED_ORIGINS` = `https://clean-coders-asl-ai-translator.onrender.com`
+  - `FLASK_DEBUG` = `0`
+
+4. Deploy and watch the logs for successful startup. Your service should be reachable at the Render-generated URL.
+
+Render CLI (optional)
+----------------------
+If you prefer the CLI, you can use the `render.yaml` file in this repository and run:
+
+1. Install the Render CLI: https://render.com/docs/deploy-to-render
+2. From your repository root run:
+
+  render deploy
+
+This will use the `render.yaml` configuration to create/update the service.
+
+If you run into errors, copy the recent logs from the Render dashboard and paste them here and I will help you interpret and fix them.
+
 If you want to expose the server on another port, edit the `app.run(...)` call in `app.py` or run with environment variables.
 
 Debugging tips

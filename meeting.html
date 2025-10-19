@@ -381,23 +381,40 @@
         const debounceValue = document.getElementById('debounceValue');
         const stabilityIndicator = document.getElementById('stabilityIndicator');
 
-        // Backend API URL - prefer same host as page (for local hosting), fallback to localhost
-        const API_URL = (function() {
-            try {
-                const host = location.hostname || '127.0.0.1';
-                const url = `http://${host}:5000`;
-                console.log('API_URL set to', url);
-                return url;
-            } catch (e) {
-                console.warn('Could not derive API_URL from location, using http://127.0.0.1:5000');
-                return 'http://127.0.0.1:5000';
-            }
-        })();
+                // Backend API URL
+                // Prefer the Render deployment URL, then injected global, then same-origin, then localhost.
+                const PREFERRED_API = 'https://clean-coders-asl-ai-translator.onrender.com';
+                const API_URL = (function() {
+                    if (window && window.__API_URL__) {
+                        console.log('API_URL injected via __API_URL__ =', window.__API_URL__);
+                        return window.__API_URL__;
+                    }
+
+                    try {
+                        const rendered = PREFERRED_API;
+                        console.log('API_URL preferring Render deployment =', rendered);
+                        return rendered;
+                    } catch (e) {
+                        try {
+                            const host = location.hostname || '127.0.0.1';
+                            const proto = location.protocol || 'http:';
+                            const url = `${proto}//${host}:5000`;
+                            console.log('API_URL fallback to same-host =', url);
+                            return url;
+                        } catch (e2) {
+                            console.warn('Could not derive API_URL from location, using http://127.0.0.1:5000');
+                            return 'http://127.0.0.1:5000';
+                        }
+                    }
+                })();
 
         // ================= DEBOUNCER CONFIGURATION =================
         let lastPredictionTime = 0;
         // Faster response: shorter debounce between predict requests
         let predictionDebounceDelay = 300; // ms (was 800)
+        // Throttle predictions to avoid overloading CPU/network
+        const PREDICT_THROTTLE_MS = 160; // ~6 predictions/sec
+        let lastPredictAt = 0;
     // After accepting a stable prediction, ignore input for this many ms
     let postAcceptCooldown = 1500; // 0.8s (was 2000)
     // Timestamp until which input is ignored
@@ -440,10 +457,11 @@
                 }
             });
 
+            // Lighter settings for better client performance
             hands.setOptions({
-                maxNumHands: 2,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.7,
+                maxNumHands: 1,
+                modelComplexity: 0,
+                minDetectionConfidence: 0.6,
                 minTrackingConfidence: 0.5
             });
 
@@ -493,6 +511,13 @@
 
         // ================= DEBOUNCER FUNCTIONS =================
         async function classifyHandPose(landmarks) {
+            // Skip if tab not visible
+            if (document.hidden) return;
+
+            const nowTs = Date.now();
+            if (nowTs - lastPredictAt < PREDICT_THROTTLE_MS) return;
+            lastPredictAt = nowTs;
+
             const now = Date.now();
             // If we accepted a stable result recently, ignore new inputs until cooldown expires
             if (now < nextAcceptUntil) return;
@@ -711,8 +736,9 @@
         // Camera functions
         async function startCamera() {
             try {
+                // Use lower resolution and capped framerate to reduce lag on slower clients
                 stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { width: 1280, height: 720 } 
+                    video: { width: 480, height: 360, frameRate: { ideal: 24, max: 30 } } 
                 });
                 videoFeed.srcObject = stream;
                 isCameraOn = true;
@@ -726,8 +752,8 @@
                     onFrame: async () => {
                         if (hands) await hands.send({ image: videoFeed });
                     },
-                    width: 1280,
-                    height: 720
+                    width: 480,
+                    height: 360
                 });
                 camera.start();
                 

@@ -1,12 +1,21 @@
-from flask import Flask, request, jsonify
+from flask import Flask, render_template, request, jsonify, send_from_directory
 from flask_cors import CORS
+import os
 import numpy as np
 import math
 import traceback
 from collections import deque
 
 app = Flask(__name__)
-CORS(app)
+# Configure CORS origins from environment for production safety
+# If ALLOWED_ORIGINS is not set, allow localhost for local testing only
+allowed = os.environ.get('ALLOWED_ORIGINS')
+if allowed:
+    origins = [o.strip() for o in allowed.split(',') if o.strip()]
+    CORS(app, resources={r"/api/*": {"origins": origins}})
+else:
+    # Default: allow localhost and 127.0.0.1 for dev
+    CORS(app, resources={r"/api/*": {"origins": ["http://localhost", "http://127.0.0.1"]}})
 
 class SimpleSignLanguageTrainer:
     def __init__(self):
@@ -339,16 +348,31 @@ class SimpleSignLanguageTrainer:
         return {'sign': 'train me first', 'confidence': 0.1}
 
 # Initialize the trainer
+import os
 trainer = SimpleSignLanguageTrainer()
+
+# Serve frontend HTML files from repo root so visiting the site shows the UI
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 @app.route('/')
 def home():
-    return jsonify({
-        'message': '🎉 ULTRA Sign Language Translator API is running!',
-        'status': 'healthy',
-        'features': 'ULTRA hand shape recognition with boosted confidence!',
-        'signs_available': trainer.sign_classes
-    })
+    # Return the main translator UI
+    return send_from_directory(BASE_DIR, 'translator.html')
+
+
+@app.route('/translator.html')
+def translator_page():
+    return send_from_directory(BASE_DIR, 'translator.html')
+
+
+@app.route('/meeting.html')
+def meeting_page():
+    return send_from_directory(BASE_DIR, 'meeting.html')
+
+@app.route('/')
+def index():
+    return render_template("meeting.html")
 
 @app.route('/api/health', methods=['GET'])
 def health():
@@ -512,12 +536,11 @@ def boost_confidence():
         return jsonify({'success': False, 'error': str(e)})
 
 if __name__ == '__main__':
+    # Use environment variables for production readiness
+    port = int(os.environ.get('PORT', 5000))
+    debug_mode = os.environ.get('FLASK_DEBUG', '0') == '1'
+
     print("🚀 ULTRA SIGN LANGUAGE TRANSLATOR STARTING...")
-    print("📍 http://localhost:5000")
+    print(f"📍 Listening on 0.0.0.0:{port} (debug={debug_mode})")
     print("🎯 Using ULTRA hand shape recognition with BOOSTED confidence!")
-    print("📦 No external dependencies required!")
-    print("💡 Training tips:")
-    print("   - Show clear hand shapes")
-    print("   - Train each sign just 2-3 times")
-    print("   - Use consistent hand positions")
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=debug_mode, host='0.0.0.0', port=port)

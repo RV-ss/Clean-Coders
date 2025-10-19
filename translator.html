@@ -650,16 +650,33 @@
         const videoSignSelect = document.getElementById('videoSignSelect');
         const videoStatus = document.getElementById('videoStatus');
 
-        // Backend API URL - prefer same host as page (for local hosting), fallback to localhost
+        // Backend API URL
+        // Prefer the Render deployment URL, then an injected global, then same-origin, then localhost.
+        const PREFERRED_API = 'https://clean-coders-asl-ai-translator.onrender.com';
         const API_URL = (function() {
+            // If a build/system injected a global API URL, prefer it
+            if (window && window.__API_URL__) {
+                console.log('API_URL injected via __API_URL__ =', window.__API_URL__);
+                return window.__API_URL__;
+            }
+
+            // Prefer the public Render deployment so the hosted site talks to the deployed API
             try {
-                const host = location.hostname || '127.0.0.1';
-                const url = `http://${host}:5000`;
-                console.log('API_URL set to', url);
-                return url;
+                const rendered = PREFERRED_API;
+                console.log('API_URL preferring Render deployment =', rendered);
+                return rendered;
             } catch (e) {
-                console.warn('Could not derive API_URL from location, using http://127.0.0.1:5000');
-                return 'http://127.0.0.1:5000';
+                // Fallback to same-host local API (useful when you run both frontend and backend locally)
+                try {
+                    const host = location.hostname || '127.0.0.1';
+                    const proto = location.protocol || 'http:';
+                    const url = `${proto}//${host}:5000`;
+                    console.log('API_URL fallback to same-host =', url);
+                    return url;
+                } catch (e2) {
+                    console.warn('Could not derive API_URL from location, using http://127.0.0.1:5000');
+                    return 'http://127.0.0.1:5000';
+                }
             }
         })();
 
@@ -691,6 +708,9 @@
         const lastSpokenAt = {};
         let lastPredictionTime = 0;
         let predictionHistory = [];
+        // Throttle predictions to avoid overloading CPU/network (milliseconds)
+        const PREDICT_THROTTLE_MS = 160; // ~6 predictions/sec
+        let lastPredictAt = 0;
     // ULTRA mode enabled by default so adjustments are applied automatically
     let ultraMode = true;
 
@@ -1252,9 +1272,9 @@
             });
 
             hands.setOptions({
-                maxNumHands: 2,
-                modelComplexity: 1,
-                minDetectionConfidence: 0.7,
+                maxNumHands: 1,            // reduce to one hand for meeting/translator use-case
+                modelComplexity: 0,        // lighter model for lower CPU usage
+                minDetectionConfidence: 0.6,
                 minTrackingConfidence: 0.5
             });
 
@@ -1301,6 +1321,16 @@
 
         // Send landmarks to backend for prediction
         async function classifyHandPose(landmarks) {
+            // Skip predictions if tab is not visible to reduce CPU when backgrounded
+            if (document.hidden) return;
+
+            const nowTs = Date.now();
+            if (nowTs - lastPredictAt < PREDICT_THROTTLE_MS) {
+                // Skip this frame's prediction to avoid overload
+                return;
+            }
+            lastPredictAt = nowTs;
+
             try {
                 const startTime = performance.now();
                 const landmarkData = landmarks.map(lm => [lm.x, lm.y, lm.z]).flat();

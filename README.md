@@ -51,6 +51,25 @@ Issues & troubleshooting
 - Camera not working: if your browser blocks camera access on `file://` origins, run a local static server (see Quick start).
 - Backend unreachable: confirm `app.py` is running and `http://127.0.0.1:5000/api/health` returns `{"status":"healthy"}`.
 
+Performance troubleshooting (camera lag)
+---------------------------------------
+
+If the camera feed lags or the page becomes unresponsive during live translation, common causes are high CPU usage (especially on low-power machines), high camera resolution, or too-frequent prediction/network requests. The following mitigations are included in the repo and can be tuned:
+
+- Lower resolution and capped frame rate: front-ends now request 480x360 @ ~24fps by default. Lowering resolution reduces CPU and bandwidth usage.
+- MediaPipe complexity: both pages use `modelComplexity: 0` and `maxNumHands: 1` by default for faster client inference.
+- Prediction throttling: the clients throttle `/api/predict` calls to roughly 6 requests/sec and skip predictions when the tab is backgrounded.
+- Disable extra UI features while debugging: close debug panels and reduce overlays.
+
+If you still see lag, try these steps:
+
+1. Lower the requested resolution further (e.g., 320x240) in `translator.html` / `meeting.html`.
+2. Increase `PREDICT_THROTTLE_MS` to reduce prediction frequency (e.g., 250-500 ms).
+3. Close other browser tabs and background apps using the camera or heavy CPU.
+4. Serve the app from a faster machine or move prediction logic server-side if the client is the bottleneck.
+
+These changes are non-destructive and intended as starting points. If you'd like I can add a small UI toggle to change resolution and throttle live so testers can tune performance without editing source files.
+
 License
 - MIT by default. Add a `LICENSE` file to the repo if you want to publish it on GitHub.
 

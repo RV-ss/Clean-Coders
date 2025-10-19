@@ -4,7 +4,11 @@ services:
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn wsgi:app
+    startCommand: gunicorn app:app -b 0.0.0.0:$PORT --workers 2
     envVars:
+      - key: ALLOWED_ORIGINS
+        value: https://clean-coders-asl-ai-translator.onrender.com
+      - key: FLASK_DEBUG
+        value: '0'
       - key: PYTHON_VERSION
         value: 3.9.0
